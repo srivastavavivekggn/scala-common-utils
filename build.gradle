@@ -1,0 +1,371 @@
+plugins {
+    id "nebula.release" version "16.0.0"
+    id "nu.studer.credentials" version "3.0"
+    id "org.scoverage" version "7.0.0"
+    id "com.github.alisiikh.scalastyle" version "3.4.1"
+    id "io.freefair.lombok" version "5.1.0"
+}
+
+description = 'Component Libraries'
+
+/**
+ * Configure subprojects - these are the actual code + artifacts we want to build
+ */
+allprojects {
+
+    group 'com.srivastavavivekggn'
+
+    apply plugin: 'idea'
+    apply plugin: 'project-report'
+    apply plugin: 'java-library'
+    apply plugin: 'scala'
+    apply plugin: "com.github.alisiikh.scalastyle"
+    apply plugin: 'maven-publish'
+    apply plugin: "org.scoverage"
+    apply plugin: "io.freefair.lombok"
+
+    idea {
+        module {
+            inheritOutputDirs = true
+            downloadJavadoc = true
+            downloadSources = true
+        }
+    }
+
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    apply from: "${project.rootDir}/gradle/versions.gradle"
+
+    ext.compileScalaParams = ['-target:jvm-1.8',
+                              '-feature',
+                              '-language:postfixOps',
+                              '-language:implicitConversions']
+
+    compileScala {
+        scalaCompileOptions.additionalParameters = compileScalaParams
+    }
+
+    compileTestScala {
+        scalaCompileOptions.additionalParameters = compileScalaParams
+    }
+
+    compileScoverageScala {
+        scalaCompileOptions.additionalParameters = compileScalaParams
+    }
+
+    test {
+        systemProperty 'user.timezone', 'GMT'
+        include "**/*Spec.*"
+        include "**/*Test.*"
+    }
+
+    scalastyle {
+        scalaVersion = '2.13'
+        scalastyleVersion = '1.5.1'
+        config = file("$rootDir/project/scalastyle_config.xml")
+        inputEncoding = 'UTF-8'
+        outputEncoding = 'UTF-8'
+        failOnWarning = false
+        verbose = false
+        quiet = false
+    }
+
+    scaladoc {
+        include '**/*.scala'
+    }
+
+    scoverage {
+        minimumRate = 0.2
+        coverageOutputCobertura = false
+        coverageOutputXML = true
+    }
+
+    task codeQuality(dependsOn: scalastyleCheck) {}
+
+    task sourcesJar(type: Jar) {
+        archiveClassifier = 'sources'
+        from sourceSets.main.allScala
+    }
+
+    task javadocJar(type: Jar) {
+        archiveClassifier = 'javadoc'
+        from scaladoc
+    }
+
+    // pull in nexus password from encrypted credentials
+    repositories {
+
+        mavenLocal()
+
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/srivastavavivekggn/*")
+            credentials {
+                username = System.getenv("USERNAME") ?: githubUser
+                password = System.getenv("TOKEN") ?: githubToken
+            }
+        }
+
+        mavenCentral()
+    }
+}
+
+subprojects {
+
+    // all projects get scala, logging, and scoverage
+    dependencies {
+        compileOnly "org.scala-lang:scala-compiler:$scalaVersion.$scalaMinorVersion"
+
+        implementation "org.scala-lang:scala-library:$scalaVersion.$scalaMinorVersion",
+                "com.typesafe.scala-logging:scala-logging_$scalaVersion:3.9.4"
+
+        scoverage "org.scoverage:scalac-scoverage-plugin_${scalaVersion}.${scalaMinorVersion}:1.4.11",
+                "org.scoverage:scalac-scoverage-runtime_${scalaVersion}:1.4.11"
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+                artifact sourcesJar
+//                artifact javadocJar
+            }
+        }
+
+        repositories {
+            maven {
+                name = "GitHubPackages"
+                url = uri("https://maven.pkg.github.com/srivastavavivekggn/common--components")
+                credentials {
+                    username = System.getenv("USERNAME") ?: githubUser
+                    password = System.getenv("TOKEN") ?: githubToken
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Configure root project IDEA settings
+ */
+idea {
+    project {
+        jdkName = '1.8'
+        languageLevel = '1.8'
+        vcs = 'Git'
+    }
+}
+
+/**
+ * Runs tests for all sub-projects and aggregates all test reports into single root reports DIR
+ */
+task allTests(type: TestReport, description: 'Executes and aggregates reporting for all tests') {
+    destinationDir = file("$buildDir/reports/allTests")
+
+    // Include the results from the `test` task in all subprojects
+    reportOn subprojects*.test
+
+    doLast {
+        System.out.println("Full test report can be found at: $buildDir/reports/allTests/index.html")
+    }
+}
+
+/**
+ * Aggregate all projects into a single dependency report
+ */
+htmlDependencyReport {
+    projects = project.subprojects
+}
+
+/**
+ * Add 'build' task to root project which runs all tests and codeQuality targets on subprojects
+ */
+build.dependsOn(allTests, codeQuality)
+
+/**
+ * For the root project, we'll disable any artifact creation / upload
+ */
+jar.enabled = false
+sourcesJar.enabled = false
+javadocJar.enabled = false
+tasks.publish.enabled = false
+
+/**
+ * Configure 'common' utils package
+ */
+project('utils-common') {
+
+    dependencies {
+        api "com.google.guava:guava:23.0",
+                "com.lihaoyi:fastparse_$scalaVersion:2.2.4",
+                "org.apache.commons:commons-text:1.6"
+
+        compileOnly "org.springframework:spring-context:$springVersion"
+        compileOnly "org.springframework:spring-core:$springVersion"
+
+        testImplementation project(':utils-test'),
+                "org.springframework:spring-context:$springVersion",
+                "ch.qos.logback:logback-classic:1.2.2"
+    }
+}
+
+/**
+ * Configure 'web' utils package
+ */
+project('utils-web') {
+
+    dependencies {
+        api project(":utils-common"),
+                'io.jsonwebtoken:jjwt:0.12.5'
+
+        compileOnly "org.springframework:spring-context:$springVersion",
+                "org.springframework:spring-web:$springVersion",
+                "org.springframework:spring-webmvc:$springVersion",
+                "org.springframework.boot:spring-boot-actuator:$springBootVersion",
+                "javax.servlet:javax.servlet-api:4.0.0"
+
+        testImplementation project(':utils-test'),
+                "org.springframework:spring-test:$springVersion",
+                "org.springframework:spring-core:$springVersion",
+                "org.springframework.boot:spring-boot-test:$springBootVersion",
+                "org.springframework:spring-web:$springVersion",
+                "javax.servlet:javax.servlet-api:4.0.0"
+    }
+}
+
+/**
+ * Configure 'test' utils package
+ */
+project('utils-test') {
+
+    dependencies {
+        api "junit:junit:4.12",
+                "org.scalatest:scalatest_$scalaVersion:3.2.11",
+                "org.scalatestplus:junit-4-13_$scalaVersion:3.2.10.0",
+                "org.scalatestplus:mockito-3-4_$scalaVersion:3.2.10.0",
+                "org.mockito:mockito-core:3.4.6",
+                "org.assertj:assertj-core:3.7.0",
+                "com.jayway.jsonpath:json-path:2.2.0",
+                "org.hamcrest:hamcrest-core:1.3",
+                "org.hamcrest:hamcrest-library:1.3",
+                "org.skyscreamer:jsonassert:1.4.0"
+
+        compileOnly "org.springframework:spring-test:$springVersion",
+                "org.springframework:spring-core:$springVersion",
+                "org.springframework.boot:spring-boot-test:$springBootVersion",
+                "org.springframework.boot:spring-boot-test-autoconfigure:$springBootVersion"
+
+        runtimeOnly "ch.qos.logback:logback-classic:1.2.2"
+    }
+}
+
+
+project('autoconfigure-aws') {
+    dependencies {
+        api project(":utils-common")
+
+        implementation "software.amazon.awssdk:core:2.20.44",
+                "software.amazon.awssdk:sns:2.20.44",
+                "software.amazon.awssdk:sqs:2.20.44",
+                "software.amazon.awssdk:sts:2.20.44",
+                "software.amazon.awssdk:apache-client:2.20.44"
+//        , "io.awspring.cloud:spring-cloud-aws-messaging:2.4.4"
+
+        compileOnly "com.srivastavavivekggn.services:healthcheck-core:4.0.1",
+                    "com.srivastavavivekggn.services:healthcheck-sqs:4.0.1",
+                    "com.srivastavavivekggn.services:healthcheck-sns:4.0.1"
+        compileOnly "org.springframework:spring-context:$springVersion"
+        compileOnly "org.springframework.boot:spring-boot:${springBootVersion}"
+        compileOnly "org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}"
+    }
+}
+
+project('autoconfigure-env') {
+    dependencies {
+        api project(":utils-common")
+        compileOnly project(":autoconfigure-health")
+        compileOnly "com.srivastavavivekggn.services:healthcheck-core:4.0.1"
+        compileOnly "org.springframework:spring-context:$springVersion"
+        compileOnly "org.springframework.boot:spring-boot:${springBootVersion}"
+        compileOnly "org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}"
+    }
+}
+
+project('autoconfigure-feign') {
+    dependencies {
+        api "org.springframework.cloud:spring-cloud-starter-openfeign:$springCloudVersion"
+    }
+}
+
+project('autoconfigure-health') {
+    dependencies {
+        api project(":utils-common")
+        api "com.srivastavavivekggn.services:healthcheck-core:4.0.1"
+        api "com.j2html:j2html:1.6.0"
+
+        compileOnly project(":autoconfigure-aws")
+        compileOnly "org.springframework:spring-web:$springVersion"
+        compileOnly "org.springframework:spring-context:$springVersion"
+        compileOnly "org.springframework.boot:spring-boot:$springBootVersion"
+        compileOnly "org.springframework.boot:spring-boot-autoconfigure:$springBootVersion"
+        compileOnly "org.springframework.boot:spring-boot-actuator:$springBootVersion"
+    }
+}
+
+project('autoconfigure-jackson') {
+    dependencies {
+        api project(":utils-common")
+
+        // core jackson libs
+        api "com.fasterxml.jackson.core:jackson-core:$jacksonVersion"
+        api "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
+
+        // jackson modules for JDK8, DateTime, Scala
+        api "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion"
+        api "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$jacksonVersion"
+        api "com.fasterxml.jackson.module:jackson-module-parameter-names:$jacksonVersion"
+        api "com.fasterxml.jackson.module:jackson-module-scala_$scalaVersion:$jacksonVersion"
+
+        compileOnly "org.springframework.boot:spring-boot-autoconfigure:$springBootVersion"
+        compileOnly "org.mongodb:bson:4.4.1"
+    }
+}
+
+project('autoconfigure-swagger2') {
+    dependencies {
+        api project(":utils-common")
+        api project(":autoconfigure-jackson")
+        api "org.reflections:reflections:0.10.2"
+        api "io.springfox:springfox-swagger2:3.0.0"
+
+        compileOnly "org.springframework.boot:spring-boot-autoconfigure:$springBootVersion"
+    }
+}
+
+project('autoconfigure-tomcat') {
+    dependencies {
+        api project(":utils-common")
+        compileOnly "javax.servlet:javax.servlet-api:4.0.0"
+        compileOnly "org.apache.tomcat.embed:tomcat-embed-core:9.0.58"
+        compileOnly "org.springframework:spring-web:$springVersion"
+        compileOnly "org.springframework:spring-webmvc:$springVersion"
+        compileOnly "org.springframework.boot:spring-boot-autoconfigure:$springBootVersion"
+    }
+}
+
+project('reactive-crud-common') {
+    dependencies {
+        api project(':utils-common'),
+            'org.springframework.data:spring-data-commons:2.6.4',
+            'io.projectreactor:reactor-core:3.4.17'
+    }
+}
+
+project('reactive-crud-mongo') {
+    dependencies {
+        api project(':reactive-crud-common')
+        api "org.mongodb:mongodb-driver-reactivestreams:4.4.2"
+        api "org.springframework.data:spring-data-mongodb:3.3.4"
+    }
+}

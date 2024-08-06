@@ -1,0 +1,5 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+    com.srivastavavivekggn.springboot.autoconfigure.aws.AwsCredentialsAutoConfiguration,\
+    com.srivastavavivekggn.springboot.autoconfigure.aws.sqs.AwsSQSAutoConfiguration,\
+    com.srivastavavivekggn.springboot.autoconfigure.aws.sns.AwsSNSAutoConfiguration,\
+    com.srivastavavivekggn.springboot.autoconfigure.aws.sts.AwsStsAutoConfiguration

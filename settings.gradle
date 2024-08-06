@@ -1,0 +1,46 @@
+rootProject.name = 'components'
+
+
+/** ************************************
+ *  AutoConfiguration
+ ************************************** */
+include ':autoconfigure-aws'
+project(":autoconfigure-aws").projectDir = new File(settingsDir, 'autoconfigure/aws')
+
+include ':autoconfigure-env'
+project(":autoconfigure-env").projectDir = new File(settingsDir, 'autoconfigure/env')
+
+include ':autoconfigure-feign'
+project(":autoconfigure-feign").projectDir = new File(settingsDir, 'autoconfigure/feign')
+
+include ':autoconfigure-health'
+project(":autoconfigure-health").projectDir = new File(settingsDir, 'autoconfigure/health')
+
+include ':autoconfigure-jackson'
+project(":autoconfigure-jackson").projectDir = new File(settingsDir, 'autoconfigure/jackson')
+
+include ':autoconfigure-swagger2'
+project(":autoconfigure-swagger2").projectDir = new File(settingsDir, 'autoconfigure/swagger2')
+
+include ':autoconfigure-tomcat'
+project(":autoconfigure-tomcat").projectDir = new File(settingsDir, 'autoconfigure/tomcat')
+
+/** ************************************
+ *  Reactive utilities
+ ************************************** */
+include ':reactive-crud-common'
+project(":reactive-crud-common").projectDir = new File(settingsDir, 'reactive/reactive-crud-common')
+
+include ':reactive-crud-mongo'
+project(":reactive-crud-mongo").projectDir = new File(settingsDir, 'reactive/reactive-crud-mongo')
+
+/** ************************************
+ *  UTILITIES
+ ************************************** */
+include ':utils-common'
+include ':utils-web'
+include ':utils-test'
+
+project(':utils-common').projectDir = new File('utilities/common')
+project(':utils-web').projectDir = new File('utilities/web')
+project(':utils-test').projectDir = new File('utilities/test')
